@@ -1,0 +1,28 @@
+# API Keys — 绝对不提交
+.env
+
+# DeepL Glossary ID（每个用户不同，自动生成）
+glossary/deepl_glossary_id.json
+
+# 临时/中间文件
+glossary/jpx_terms.json
+glossary/jpx_missing.json
+glossary/jpx_zh_pairs.json
+glossary/hyper_sbi.html
+glossary/jpx_data.xml
+glossary/jpx_glossary.html
+glossary/ms2_manual.pdf
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# 测试输出
+test_report*.docx
+
+# IDE
+.vscode/
+.idea/
+*.swp
