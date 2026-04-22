@@ -51,19 +51,31 @@ def _get_glossary() -> dict:
     return _glossary_cache
 
 
-def translate(text: str, glossary_id: str | None = None, style: str = "formal") -> TranslationResult:
-    """执行完整翻译流水线"""
-    glossary_dict = _get_glossary()
+def translate(text: str, glossary_id: str | None = None, style: str = "formal", direction: str = "zh2ja") -> TranslationResult:
+    """
+    执行完整翻译流水线。
+    direction: "zh2ja"（中文→日语，默认）或 "ja2zh"（日语→中文）
+    """
+    if direction == "ja2zh":
+        # 反向词典 {ja: zh}
+        forward = _get_glossary()
+        glossary_dict = {ja: zh for zh, ja in forward.items() if ja and zh}
+        source_lang = "ja"
+        target_lang = "zh"
+    else:
+        glossary_dict = _get_glossary()
+        source_lang = "zh"
+        target_lang = "ja"
 
     # Step 1: 术语识别
-    pre_result = pre_processor.run(text, glossary_dict=glossary_dict)
+    pre_result = pre_processor.run(text, glossary_dict=glossary_dict, source_lang=source_lang)
     terms = pre_result["terms"]
 
     # Step 2: DeepL 翻译
-    draft = deepl_translator.run(text, glossary_id=glossary_id)
+    draft = deepl_translator.run(text, glossary_id=glossary_id, direction=direction)
 
     # Step 3: Claude 审校
-    post_result = post_processor.run(text, terms, draft, style=style)
+    post_result = post_processor.run(text, terms, draft, style=style, target_lang=target_lang)
 
     return TranslationResult(
         source=text,

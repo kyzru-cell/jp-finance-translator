@@ -1,18 +1,20 @@
 """
 translator.py
-调用 DeepL API 进行中文→日语翻译，使用已上传的 Glossary 强制术语。
+调用 DeepL API 进行翻译，支持 ZH→JA（默认）和 JA→ZH 两个方向。
+使用已上传的 Glossary 强制术语。
 """
 
 import os
 from dotenv import load_dotenv
-from glossary_convert import load_glossary_id
+from glossary_convert import load_glossary_id, load_reversed_glossary_id
 
 load_dotenv()
 
 
-def run(text: str, glossary_id: str | None = None) -> str:
+def run(text: str, glossary_id: str | None = None, direction: str = "zh2ja") -> str:
     """
     使用 DeepL 翻译文本。
+    direction: "zh2ja"（中文→日语，默认）或 "ja2zh"（日语→中文）
     glossary_id 未传入时自动从本地配置读取。
     """
     import deepl
@@ -23,15 +25,21 @@ def run(text: str, glossary_id: str | None = None) -> str:
 
     translator = deepl.Translator(api_key)
 
-    # 自动读取已上传的 glossary_id
-    if glossary_id is None:
-        glossary_id = load_glossary_id()
-
-    kwargs = {
-        "source_lang": "ZH",
-        "target_lang": "JA",
-        "formality": "more",  # 正式文体（書き言葉）
-    }
+    if direction == "ja2zh":
+        if glossary_id is None:
+            glossary_id = load_reversed_glossary_id()
+        kwargs = {
+            "source_lang": "JA",
+            "target_lang": "ZH",
+        }
+    else:
+        if glossary_id is None:
+            glossary_id = load_glossary_id()
+        kwargs = {
+            "source_lang": "ZH",
+            "target_lang": "JA",
+            "formality": "more",  # 正式文体（書き言葉）
+        }
 
     if glossary_id:
         kwargs["glossary"] = glossary_id

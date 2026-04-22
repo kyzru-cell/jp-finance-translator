@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def run(source_text: str, terms: list[dict], draft: str, style: str = "formal") -> dict:
+def run(source_text: str, terms: list[dict], draft: str, style: str = "formal", target_lang: str = "ja") -> dict:
     """
     审校翻译结果。
 
@@ -45,28 +45,50 @@ def run(source_text: str, terms: list[dict], draft: str, style: str = "formal") 
     # 构建术语核查清单
     term_checklist = []
     uncovered = []
-    for t in terms:
-        if t["in_glossary"] and t["ja"]:
-            term_checklist.append(f'  · 「{t["zh"]}」→ 应译为「{t["ja"]}」')
-        else:
-            uncovered.append(t["zh"])
+
+    if target_lang == "zh":
+        # JA→ZH：terms 中的 key 是 ja
+        for t in terms:
+            if t["in_glossary"] and t.get("zh"):
+                term_checklist.append(f'  · 「{t["ja"]}」→ 应译为「{t["zh"]}」')
+            else:
+                uncovered.append(t.get("ja", ""))
+    else:
+        # ZH→JA（默认）
+        for t in terms:
+            if t["in_glossary"] and t.get("ja"):
+                term_checklist.append(f'  · 「{t["zh"]}」→ 应译为「{t["ja"]}」')
+            else:
+                uncovered.append(t.get("zh", ""))
 
     checklist_str = "\n".join(term_checklist) if term_checklist else "  （无收录术语）"
     uncovered_str = "、".join(uncovered) if uncovered else "无"
 
-    # 根据 style 决定语体指导
-    if style == "marketing":
+    if target_lang == "zh":
+        # JA→ZH 审校提示
+        style_guide = (
+            "输出语言：简体中文。"
+            "语体风格：正式的中文金融文案，参考富途/moomoo证券的表达习惯。"
+            "术语统一，避免口语化或模糊表达。"
+        )
+        final_label = "中文译文"
+        source_label = "日语原文"
+    elif style == "marketing":
         style_guide = (
             "语体风格：营销推广文案，参考乐天证券（楽天証券）的表达习惯。"
             "语气亲切自然，允许使用です/ます体，可适当使用口语化表达，"
             "避免过于生硬的书面语。"
         )
-    else:  # formal（默认）
+        final_label = "日语译文"
+        source_label = "中文原文"
+    else:
         style_guide = (
             "语体风格：正式产品文案，参考SBI证券（SBI証券）的表达习惯。"
-            "使用严谨的书き言葉体，以だ/である体为准，"
+            "使用严谨的書き言葉体，以だ/である体为准，"
             "术语表达规范统一，避免口语化或模糊表达。"
         )
+        final_label = "日语译文"
+        source_label = "中文原文"
 
     system_prompt = f"""你是一位资深中日金融翻译审校专家。
 你的任务是审查翻译初稿，修正错误，输出最终版本。
@@ -77,14 +99,14 @@ def run(source_text: str, terms: list[dict], draft: str, style: str = "formal") 
 1. 只输出 JSON，不要输出其他内容
 2. JSON 格式如下（严格遵守）：
 {{
-  "final": "修正后的完整日语译文",
+  "final": "修正后的完整译文",
   "issues": ["发现的问题1", "发现的问题2"],
   "score": 85
 }}
 3. issues 为空数组时写 []
 4. score 为 0-100 的整数，反映初稿质量（100=无需修改）"""
 
-    user_prompt = f"""## 中文原文
+    user_prompt = f"""## {source_label}
 {source_text}
 
 ## 翻译初稿（DeepL）
@@ -99,7 +121,7 @@ def run(source_text: str, terms: list[dict], draft: str, style: str = "formal") 
 ## 审校要求
 1. 逐一核查术语清单，确认每个术语是否正确出现在初稿中
 2. 若术语被 DeepL 翻译为错误形式，在 final 中修正
-3. 检查全文语体是否符合指定风格（{style}）
+3. 检查全文语体是否符合指定风格
 4. 检查数字格式（半角数字，百分号用%）
 5. issues 只列真实问题，无问题不要捏造"""
 

@@ -26,6 +26,8 @@ console = Console(force_terminal=True, legacy_windows=False)
 GLOSSARY_MD = Path(__file__).parent / "glossary" / "glossary.md"
 GLOSSARY_TSV = Path(__file__).parent / "glossary" / "glossary_deepl.tsv"
 GLOSSARY_ID_FILE = Path(__file__).parent / "glossary" / "deepl_glossary_id.json"
+GLOSSARY_TSV_REVERSED = Path(__file__).parent / "glossary" / "glossary_deepl_ja2zh.tsv"
+GLOSSARY_ID_FILE_REVERSED = Path(__file__).parent / "glossary" / "deepl_glossary_id_ja2zh.json"
 
 
 def parse_glossary_md(path: Path) -> dict[str, str]:
@@ -168,11 +170,48 @@ def delete(glossary_id: str = typer.Argument(..., help="要删除的 Glossary ID
 
 
 def load_glossary_id() -> Optional[str]:
-    """读取本地保存的 glossary_id"""
+    """读取本地保存的 glossary_id（ZH→JA）"""
     if GLOSSARY_ID_FILE.exists():
         data = json.loads(GLOSSARY_ID_FILE.read_text(encoding="utf-8"))
         return data.get("glossary_id")
     return None
+
+
+def load_reversed_glossary_id() -> Optional[str]:
+    """读取本地保存的 glossary_id（JA→ZH）"""
+    if GLOSSARY_ID_FILE_REVERSED.exists():
+        data = json.loads(GLOSSARY_ID_FILE_REVERSED.read_text(encoding="utf-8"))
+        return data.get("glossary_id")
+    return None
+
+
+@app.command("upload-reversed")
+def upload_reversed(name: str = typer.Option("finance-ja2zh", help="Glossary 名称")):
+    """导出反向（日语→中文）TSV 并上传到 DeepL"""
+    api_key = os.getenv("DEEPL_API_KEY")
+    if not api_key:
+        console.print("[red]错误：未设置 DEEPL_API_KEY[/red]")
+        raise typer.Exit(1)
+
+    import deepl
+
+    entries_forward = parse_glossary_md(GLOSSARY_MD)
+    # 反転：日语 → 中文（値と値が一意であることを前提）
+    entries_reversed = {ja: zh for zh, ja in entries_forward.items() if ja and zh}
+    count = export_tsv(entries_reversed, GLOSSARY_TSV_REVERSED)
+    console.print(f"[green]✓[/green] 反向词条：{count} 条")
+
+    translator = deepl.Translator(api_key)
+    glossary = translator.create_glossary(
+        name=name,
+        source_lang="JA",
+        target_lang="ZH",
+        entries=entries_reversed,
+    )
+
+    saved = {"glossary_id": glossary.glossary_id, "name": name, "entry_count": count}
+    GLOSSARY_ID_FILE_REVERSED.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+    console.print(f"[green]✓ 反向 Glossary 上传成功[/green]  ID: {glossary.glossary_id}")
 
 
 if __name__ == "__main__":

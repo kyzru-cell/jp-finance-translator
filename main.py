@@ -26,21 +26,27 @@ console = Console()
 
 @app.command()
 def translate(
-    text: str = typer.Argument(..., help="要翻译的中文文本"),
+    text: str = typer.Argument(..., help="要翻译的文本"),
     glossary_id: Optional[str] = typer.Option(None, "--glossary-id", "-g", help="DeepL Glossary ID"),
     style: str = typer.Option("formal", "--style", "-s", help="语体风格：formal（正式产品文案）或 marketing（营销推广）"),
+    direction: str = typer.Option("zh2ja", "--direction", "-d", help="翻译方向：zh2ja（中文→日语，默认）或 ja2zh（日语→中文）"),
     show_draft: bool = typer.Option(False, "--show-draft", help="同时显示 DeepL 初稿"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="显示详细信息"),
 ):
-    """翻译单段中文文本"""
+    """翻译文本（中文→日语 或 日语→中文）"""
     from dotenv import load_dotenv
     load_dotenv()
 
+    if direction not in ("zh2ja", "ja2zh"):
+        console.print("[red]--direction 只接受 zh2ja 或 ja2zh[/red]")
+        raise typer.Exit(1)
+
+    dir_label = "[dim]日→中[/dim]" if direction == "ja2zh" else "[dim]中→日[/dim]"
     style_label = "[dim]营销体[/dim]" if style == "marketing" else "[dim]正式体[/dim]"
-    console.print(f"[cyan]▶ 开始翻译...[/cyan] {style_label}")
+    console.print(f"[cyan]▶ 开始翻译...[/cyan] {dir_label} {style_label}")
 
     import orchestrator
-    result = orchestrator.translate(text, glossary_id=glossary_id, style=style)
+    result = orchestrator.translate(text, glossary_id=glossary_id, style=style, direction=direction)
 
     # 输出结果
     console.print(Panel(result.source, title="[bold]原文[/bold]", border_style="blue"))
@@ -58,10 +64,16 @@ def translate(
     if verbose:
         # 术语表
         if result.terms:
-            table = Table("中文", "日语", "收录", box=box.SIMPLE)
-            for t in result.terms:
-                status = "[green]✓[/green]" if t["in_glossary"] else "[red]✗[/red]"
-                table.add_row(t["zh"], t["ja"] or "—", status)
+            if direction == "ja2zh":
+                table = Table("日语", "中文", "收录", box=box.SIMPLE)
+                for t in result.terms:
+                    status = "[green]✓[/green]" if t["in_glossary"] else "[red]✗[/red]"
+                    table.add_row(t.get("ja", ""), t.get("zh") or "—", status)
+            else:
+                table = Table("中文", "日语", "收录", box=box.SIMPLE)
+                for t in result.terms:
+                    status = "[green]✓[/green]" if t["in_glossary"] else "[red]✗[/red]"
+                    table.add_row(t.get("zh", ""), t.get("ja") or "—", status)
             console.print(table)
 
         # 问题列表
